@@ -1,0 +1,113 @@
+    /**
+     * This method join two objects of the same type
+     * @param oldObject that contains the object to be update
+     * @param newObject that contains the new object
+     * @param <T> to class type
+     * @return return a new object with merge between oldObject and newObject
+     * @throws InstantiationException
+     * @throws IllegalAccessException
+     */
+    @SuppressWarnings ("unchecked")
+    public static <T> T mergeObject(T oldObject, T newObject)
+    {
+        try
+        {
+            T result = (T) oldObject.getClass().newInstance();
+            /* Instancia um objeto(result) da mesma classe do objeto passado(oldObject)   */
+            for (Field field : oldObject.getClass().getDeclaredFields())
+            {
+                field.setAccessible(true);
+                Object oldChildren = field.get(oldObject);
+                Object newChildren = field.get(newObject);
+                //Verifica se os dados do novo objeto não são nulos ou tipo primitivo
+                if (newChildren != null && isObject(newChildren))
+                {
+                    //Verifica se os atributos dos objetos, são do tipo Collection(List, Set etc)
+                    if (oldChildren instanceof Collection<?> && newChildren instanceof Collection<?>)
+                    {
+                        Collection<Object> oldCollection = ((Collection<Object>) oldChildren);
+                        Collection<Object> newCollection = ((Collection<Object>) newChildren);
+
+                        //Se o atributo do novo objeto for vazio ou nulo, apenas seta o valor diretamente, se não realiza os passos abaixo.
+                        if (!newCollection.isEmpty() && !oldCollection.isEmpty())
+                        {
+                            T resultCollection = (T) oldCollection.getClass().newInstance();
+
+                            Field[] fields = oldCollection.toArray()[0].getClass().getDeclaredFields();
+                            //Variavel responsavel por controlar a inserção dos objetos da lista antiga para a lista resultado, caso os campos de key não forem iguais.
+                            boolean alreadyUpdate = true;
+                            //Faz uma interação em cima das listas do newObject
+                            for (int newCollectionIndex = 0; newCollectionIndex < newCollection.size(); newCollectionIndex++)
+                            {
+                                //Recupera o valor do primeiro campo da lista para comparação.
+                                fields[0].setAccessible(true);
+                                Object key1 = fields[0].get(newCollection.toArray()[newCollectionIndex]);
+                                boolean updated = false;
+
+                                for (int oldCollectionIndex = 0; oldCollectionIndex < oldCollection.size(); oldCollectionIndex++)
+                                {
+                                    Object key2 = fields[0].get(oldCollection.toArray()[oldCollectionIndex]);
+                                    //Compara os campos key da lista antiga com a nova, se forem iguais, é atualizado o objeto da lista
+                                    if (key1 == key2)
+                                    {
+                                        Object singleResult = mergeObject(oldCollection.toArray()[oldCollectionIndex], newCollection.toArray()[newCollectionIndex]);
+                                        ((Collection<Object>) resultCollection).add(singleResult);
+                                        updated = true;
+                                    }
+                                    else if (alreadyUpdate)
+                                    {
+                                        ((Collection<Object>) resultCollection).add(oldCollection.toArray()[oldCollectionIndex]);
+
+                                        if (oldCollectionIndex == oldCollection.size())
+                                        {
+                                            alreadyUpdate = false;
+                                        }
+                                    }
+
+                                }
+                                if (!updated)
+                                {
+                                    //Caso o objeto não tenha sofrido merge, ele é inserido.
+                                    ((Collection<Object>) resultCollection).add(newCollection.toArray()[newCollectionIndex]);
+                                }
+                            }
+                            field.set(result, resultCollection);
+                        }
+                        else if (!newCollection.isEmpty() && oldCollection.isEmpty())
+                        {
+                            field.set(result, newCollection);
+                        }
+                        else
+                        {
+                            field.set(result, oldCollection);
+                        }
+                    }
+                    else
+                    {
+                        Object singleResult = mergeObject(oldChildren, newChildren);
+                        field.set(result, singleResult);
+                    }
+                }
+                else
+                {
+                    //Se for tipo primitivo adiciona diretamente
+                    Object value = (newChildren != null) ? newChildren : oldChildren;
+                    field.set(result, value);
+                }
+            }
+            return result;
+        }
+        catch (InstantiationException | IllegalAccessException e)
+        {
+            LOG.error("Unexpected exception while instantiating class", e);
+            return null;
+        }
+    }
+
+    private static <T> Boolean isObject(T t)
+    {
+        return !(!(t instanceof Object) || (t instanceof Byte) || (t instanceof Short) || (t instanceof Integer)
+                || (t instanceof Long) || (t instanceof Float) || (t instanceof Double) || (t instanceof Character)
+                || (t instanceof Boolean) || (t instanceof String) || t instanceof DateTime || t instanceof URI);
+
+    }
